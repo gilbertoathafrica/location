@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="rw">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dusangize aho uherereye</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 420px; margin: 0 auto; padding: 20px 16px; color: #222; background: #fff; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    p.sub { color: #555; margin-top: 0; }
+    label { display: block; margin: 14px 0 4px; font-weight: bold; font-size: 14px; }
+    input[type=text], input[type=number], select, textarea { width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px; border: 1px solid #bbb; border-radius: 6px; font-family: inherit; background: #fff; }
+    .choices { display: flex; gap: 8px; }
+    .choices label { flex: 1; margin: 0; font-weight: normal; border: 1px solid #bbb; border-radius: 6px; padding: 10px; display: flex; align-items: center; gap: 6px; font-size: 15px; }
+    .row { display: flex; gap: 8px; }
+    .row input { flex: 2; }
+    .row select { flex: 1; }
+    .invalid { border-color: #b3261e !important; }
+    button { width: 100%; margin-top: 20px; padding: 14px; font-size: 17px; border: 0; border-radius: 6px; background: #1a7f37; color: #fff; }
+    button:disabled { background: #999; }
+    #status { margin-top: 16px; padding: 12px; border-radius: 6px; display: none; }
+    .ok { background: #e6f4ea; color: #1a7f37; }
+    .err { background: #fdecea; color: #b3261e; }
+    .info { background: #eef3fb; color: #1f4e8c; }
+    small.req { color: #777; }
+    #done { text-align: center; padding-top: 60px; }
+    #done .tick { width: 80px; height: 80px; line-height: 80px; margin: 0 auto 16px; border-radius: 50%; background: #e6f4ea; color: #1a7f37; font-size: 44px; }
+    #done h1 { color: #1a7f37; }
+    #done p { font-size: 17px; color: #333; }
+    #done .acc { font-size: 14px; color: #777; }
+    #done .again { background: #fff; color: #1a7f37; border: 1px solid #1a7f37; margin-top: 32px; }
+  </style>
+</head>
+<body>
+  <div id="formBox">
+  <h1>Dusangize aho uherereye</h1>
+  <p class="sub">Uzuza iyi form iri hasi,hagarara hagati m'umurima(byibura metero 15 uvuye kumbibi) nibagusaba gufungura location ukande kuri <b>Allow</b> (Emera). Tegereza kugeza ubutumwa bwo gushimira bugaragaye.</p>
+  <small class="req">* = ni ngombwa kuzuza</small>
+
+  <label for="site">Izina ry'ahantu *</label>
+  <input id="site" type="text" maxlength="100" placeholder="Urugero: Nyagatare, Karangazi">
+
+  <label for="collector">Izina ry'umuntu uri gukusanya amakuru *</label>
+  <input id="collector" type="text" maxlength="100">
+
+  <label>Aho akorera cyangwa aho yakoreye *</label>
+  <div class="choices" id="wtypeBox">
+    <label><input type="radio" name="wtype" value="Koperative" onchange="updateWorkplace()"> Koperative</label>
+    <label><input type="radio" name="wtype" value="Umuhinzi ku giti cye" onchange="updateWorkplace()"> Umuhinzi ku giti cye</label>
+  </div>
+
+  <div id="wnameBox" style="display:none">
+    <label for="wname" id="wnameLabel">Izina rya koperative *</label>
+    <input id="wname" type="text" maxlength="150">
+  </div>
+
+  <label for="area">Ubuso bwakoreshejweho OSL bwose hamwe kuri uyu murima *</label>
+  <div class="row">
+    <input id="area" type="number" min="0" step="any" inputmode="decimal" placeholder="Urugero: 2.5">
+    <select id="unit">
+      <option value="ha">Hegitari (ha)</option>
+      <option value="ari">Ari (a)</option>
+      <option value="m2">Metero kare (m²)</option>
+    </select>
+  </div>
+
+  <label for="crop">Igihingwa cyakoreshejweho OSL *</label>
+  <input id="crop" type="text" maxlength="100" list="crops" placeholder="Urugero: Ibigori">
+  <datalist id="crops">
+    <option value="Ibigori">
+    <option value="Ibishyimbo">
+    <option value="Ibirayi">
+    <option value="Umuceri">
+    <option value="Imboga">
+    <option value="Urutoki">
+    <option value="Icyayi">
+    <option value="Ikawa">
+  </datalist>
+
+  <label for="note">Ibindi bisobanuro by'inyongera</label>
+  <textarea id="note" rows="2" maxlength="200"></textarea>
+
+  <button id="btn" onclick="share()">Ohereza</button>
+  </div>
+  <div id="status"></div>
+
+  <div id="done" style="display:none">
+    <div class="tick">✓</div>
+    <h1>Murakoze!</h1>
+    <p>Amakuru yawe yabitswe neza.</p>
+    <p class="acc" id="doneAcc"></p>
+    <button class="again" onclick="location.reload()">Ohereza andi makuru</button>
+  </div>
+
+  <script>
+  
+    var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwnqLlfCl7eH4vNkmCUkjhQKx9bvxV7Hmtu0HB_msclgL1WvmJD8fnYAgCnEsGALCD3/exec';
+
+    var TARGET_ACCURACY = 15;   // metres: stop as soon as a reading is this good
+    var MAX_WAIT_MS = 60000;    // otherwise keep the best reading for up to 60 s
+
+    // If the link has ?site=..., pre-fill the site box (people can still edit it).
+    var urlSite = new URLSearchParams(window.location.search).get('site') || '';
+    document.getElementById('site').value = urlSite.replace(/_/g, ' ');
+
+    function $(id) { return document.getElementById(id); }
+
+    function show(msg, cls) {
+      var s = $('status');
+      s.className = cls; s.style.display = 'block'; s.textContent = msg;
+    }
+
+    function wtype() {
+      var r = document.querySelector('input[name=wtype]:checked');
+      return r ? r.value : '';
+    }
+
+    function updateWorkplace() {
+      var t = wtype();
+      $('wnameBox').style.display = t ? 'block' : 'none';
+      $('wnameLabel').textContent = (t === 'Koperative') ? 'Izina rya koperative *' : "Izina ry'umuhinzi *";
+      $('wtypeBox').classList.remove('invalid');
+    }
+
+    function readForm() {
+      ['site', 'collector', 'wname', 'area', 'crop'].forEach(function (id) { $(id).classList.remove('invalid'); });
+      $('wtypeBox').classList.remove('invalid');
+
+      var f = {
+        site: $('site').value.trim(),
+        collector: $('collector').value.trim(),
+        workplaceType: wtype(),
+        workplaceName: $('wname').value.trim(),
+        area: $('area').value.trim(),
+        unit: $('unit').value,
+        crop: $('crop').value.trim(),
+        note: $('note').value.trim()
+      };
+
+      function fail(id, msg) {
+        $(id).classList.add('invalid');
+        var el = $(id).querySelector ? $(id).querySelector('input') || $(id) : $(id);
+        el.focus();
+        show(msg, 'err');
+        return null;
+      }
+
+      if (!f.site) return fail('site', "Andika izina ry'ahantu.");
+      if (!f.collector) return fail('collector', "Andika izina ry'umuntu uri gukusanya amakuru.");
+      if (!f.workplaceType) return fail('wtypeBox', 'Hitamo niba ari koperative cyangwa umuhinzi ku giti cye.');
+      if (!f.workplaceName) return fail('wname', f.workplaceType === 'Koperative'
+        ? 'Andika izina rya koperative.' : "Andika izina ry'umuhinzi.");
+      var a = Number(f.area);
+      if (!f.area || !isFinite(a) || a <= 0) return fail('area', 'Andika ubuso nyabwo (umubare uruta zeru).');
+      if (!f.crop) return fail('crop', 'Andika igihingwa cyakoreshejweho OSL.');
+      return f;
+    }
+
+    function share() {
+      var btn = $('btn');
+      var form = readForm();
+      if (!form) return;
+
+      if (!navigator.geolocation) {
+        show('Iyi browser ntishobora kohereza aho uri. Gerageza ukoresheje Chrome kuri telefoni yawe.', 'err');
+        return;
+      }
+      btn.disabled = true;
+      show('Turimo gushaka aho uri… tegereza gato (kugeza ku munota 1).', 'info');
+
+      var best = null;
+      var done = false;
+      var start = Date.now();
+
+      function finish() {
+        if (done) return;
+        done = true;
+        navigator.geolocation.clearWatch(watchId);
+        clearTimeout(timer);
+        if (!best) {
+          btn.disabled = false;
+          show('Ntibishobotse kubona aho uri. Fungura Location (GPS), ujye hanze, hanyuma wongere ugerageze.', 'err');
+          return;
+        }
+        send(best, form);
+      }
+
+      var watchId = navigator.geolocation.watchPosition(function (pos) {
+        if (!best || pos.coords.accuracy < best.coords.accuracy) best = pos;
+        var secs = Math.round((Date.now() - start) / 1000);
+        show('Turimo kunoza ibipimo… ubwizerwe ubu: hafi metero ' + Math.round(best.coords.accuracy) +
+             ' (amasegonda ' + secs + '). Tegereza.', 'info');
+        if (best.coords.accuracy <= TARGET_ACCURACY) finish();
+      }, function (err) {
+        if (err.code === 1) {           
+          done = true;
+          navigator.geolocation.clearWatch(watchId);
+          clearTimeout(timer);
+          btn.disabled = false;
+          show('Ntiwatanze uburenganzira bwo kumenya aho uri. Emera (Allow) Location kuri iyi paji hanyuma wongere ugerageze.', 'err');
+        }
+        // other errors: keep waiting; the timer will finish with the best reading so far
+      }, { enableHighAccuracy: true, maximumAge: 0, timeout: MAX_WAIT_MS });
+
+      var timer = setTimeout(finish, MAX_WAIT_MS);
+    }
+
+    function send(pos, form) {
+      var btn = $('btn');
+      var data = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        site: form.site,
+        name: form.collector,
+        workplaceType: form.workplaceType,
+        workplaceName: form.workplaceName,
+        area: form.area,
+        unit: form.unit,
+        crop: form.crop,
+        note: form.note
+      };
+      show('Birimo kubikwa…', 'info');
+
+      fetch(SCRIPT_URL, {
+        method: 'POST',
+        // text/plain avoids a CORS preflight, which Apps Script doesn't support
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(data)
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res.ok) throw new Error(res.error || 'error');
+          // Hide the form and show only the confirmation.
+          $('formBox').style.display = 'none';
+          $('status').style.display = 'none';
+          $('doneAcc').textContent = 'Ubwizerwe bw\'ibipimo: hafi metero ' + Math.round(data.accuracy) + '.';
+          $('done').style.display = 'block';
+          window.scrollTo(0, 0);
+        })
+        .catch(function () {
+          btn.disabled = false;
+          show('Ntibyabitswe. Reba ko ufite interineti hanyuma wongere ugerageze.', 'err');
+        });
+    }
+  </script>
+</body>
+</html>
