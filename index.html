@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dusangize aho uherereye</title>
+  <title>Gukusanya amakuru y'aho OSL iri gukoreshwa</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 420px; margin: 0 auto; padding: 20px 16px; color: #222; background: #fff; }
     h1 { font-size: 22px; margin-bottom: 4px; }
@@ -23,6 +23,8 @@
     .err { background: #fdecea; color: #b3261e; }
     .info { background: #eef3fb; color: #1f4e8c; }
     small.req { color: #777; }
+    select:disabled { color: #999; background: #f4f4f4; }
+    input.other { display: none; margin-top: 6px; }
     #done { text-align: center; padding-top: 60px; }
     #done .tick { width: 80px; height: 80px; line-height: 80px; margin: 0 auto 16px; border-radius: 50%; background: #e6f4ea; color: #1a7f37; font-size: 44px; }
     #done h1 { color: #1a7f37; }
@@ -37,7 +39,7 @@
   <p class="sub">Uzuza iyi form iri hasi uhagaze hagati m'umurima(byibura muri metero 15 uvuye kumbibi z'umurima) nibagusaba gufungura location ukande kuri <b>Allow</b> (Emera). Tegereza kugeza ubutumwa bwo gushimira bugaragaye.</p>
 
   <label for="district">Akarere *</label>
-  <select id="district">
+  <select id="district" onchange="onDistrict()">
     <option value="">— Hitamo akarere —</option>
       <optgroup label="Umujyi wa Kigali"><option>Gasabo</option><option>Kicukiro</option><option>Nyarugenge</option></optgroup>
       <optgroup label="Amajyaruguru"><option>Burera</option><option>Gakenke</option><option>Gicumbi</option><option>Musanze</option><option>Rulindo</option></optgroup>
@@ -47,13 +49,16 @@
   </select>
 
   <label for="sector">Umurenge *</label>
-  <input id="sector" type="text" maxlength="100" placeholder="Urugero: Karangazi">
+  <select id="sector" disabled><option value="">— Banza uhitemo akarere —</option></select>
+  <input id="sectorOther" class="other" type="text" maxlength="100" placeholder="Andika umurenge">
 
   <label for="cell">Akagari *</label>
-  <input id="cell" type="text" maxlength="100">
+  <select id="cell" disabled><option value="">— Banza uhitemo umurenge —</option></select>
+  <input id="cellOther" class="other" type="text" maxlength="100" placeholder="Andika akagari">
 
   <label for="village">Umudugudu *</label>
-  <input id="village" type="text" maxlength="100">
+  <select id="village" disabled><option value="">— Banza uhitemo akagari —</option></select>
+  <input id="villageOther" class="other" type="text" maxlength="100" placeholder="Andika umudugudu">
 
   <label for="collector">Izina ry'umuntu uri gukusanya amakuru *</label>
   <input id="collector" type="text" maxlength="100">
@@ -116,6 +121,89 @@
 
     function $(id) { return document.getElementById(id); }
 
+    // ----- Linked location lists: District -> Sector -> Cell -> Village -----
+    // locations.json sits next to this page: { district: { sector: { cell: [villages] } } }
+    var LOC = null;
+    var OTHER = '__other';
+    var LEVELS = ['sector', 'cell', 'village'];
+    var PROMPT = {
+      sector:  ['— Hitamo umurenge —',  '— Banza uhitemo akarere —'],
+      cell:    ['— Hitamo akagari —',   '— Banza uhitemo umurenge —'],
+      village: ['— Hitamo umudugudu —', '— Banza uhitemo akagari —']
+    };
+
+    fetch('locations.json')
+      .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+      .then(function (data) { LOC = data; onDistrict(); })
+      .catch(function () { LOC = null; onDistrict(); });   // no list: people type names instead
+
+    // Value of a level: the chosen name, or what was typed if "not on the list".
+    function val(level) {
+      if (level === 'district') return $('district').value;
+      var sel = $(level), other = $(level + 'Other');
+      return (sel.style.display === 'none' || sel.value === OTHER) ? other.value.trim() : sel.value;
+    }
+
+    // List of names available for a level, given the choices above it.
+    // Returns null when there is no list (data missing, or a parent was typed in).
+    function choices(level) {
+      if (!LOC) return null;
+      var d = LOC[$('district').value];
+      if (!d) return [];
+      if (level === 'sector') return Object.keys(d);
+      var sSel = $('sector'); if (sSel.value === OTHER || sSel.style.display === 'none') return null;
+      var sc = d[sSel.value]; if (!sc) return [];
+      if (level === 'cell') return Object.keys(sc);
+      var cSel = $('cell'); if (cSel.value === OTHER || cSel.style.display === 'none') return null;
+      return sc[cSel.value] || [];
+    }
+
+    function fill(level) {
+      var sel = $(level), other = $(level + 'Other');
+      var list = choices(level);
+      other.value = '';
+      sel.classList.remove('invalid'); other.classList.remove('invalid');
+      if (list === null) {                    // free typing for this level
+        var parentKnown = level === 'sector' ? !!$('district').value : !!val(LEVELS[LEVELS.indexOf(level) - 1]);
+        sel.style.display = 'none';
+        other.style.display = 'block';
+        other.disabled = !parentKnown;
+        return;
+      }
+      sel.style.display = ''; other.style.display = 'none';
+      sel.innerHTML = '';
+      var empty = list.length === 0;
+      sel.add(new Option(PROMPT[level][empty ? 1 : 0], ''));
+      list.forEach(function (name) { sel.add(new Option(name, name)); });
+      if (!empty) sel.add(new Option('Ntibiri ku rutonde (andika)', OTHER));
+      sel.disabled = empty;
+    }
+
+    function onLevel(level) {
+      var sel = $(level), other = $(level + 'Other');
+      if (sel.value === OTHER) { other.style.display = 'block'; other.disabled = false; other.focus(); }
+      else { other.style.display = 'none'; other.value = ''; }
+      sel.classList.remove('invalid');
+      var i = LEVELS.indexOf(level);
+      for (var j = i + 1; j < LEVELS.length; j++) fill(LEVELS[j]);
+    }
+
+    function onDistrict() {
+      $('district').classList.remove('invalid');
+      LEVELS.forEach(fill);
+    }
+
+    LEVELS.forEach(function (level) {
+      $(level).addEventListener('change', function () { onLevel(level); });
+      $(level + 'Other').addEventListener('input', function () {
+        $(level + 'Other').classList.remove('invalid');
+        // a typed parent unlocks typing for the next level
+        var i = LEVELS.indexOf(level);
+        if (i + 1 < LEVELS.length && $(LEVELS[i + 1]).style.display === 'none')
+          $(LEVELS[i + 1] + 'Other').disabled = !$(level + 'Other').value.trim();
+      });
+    });
+
     // Optional: a link ending in ?district=Nyagatare pre-selects the district.
     var urlDistrict = new URLSearchParams(window.location.search).get('district') || '';
     if (urlDistrict) {
@@ -144,14 +232,15 @@
 
     // Returns the form values, or null (with the first problem highlighted) if something is missing.
     function readForm() {
-      ['district', 'sector', 'cell', 'village', 'collector', 'wname', 'area', 'crop'].forEach(function (id) { $(id).classList.remove('invalid'); });
+      ['district', 'sector', 'cell', 'village', 'sectorOther', 'cellOther', 'villageOther',
+       'collector', 'wname', 'area', 'crop'].forEach(function (id) { $(id).classList.remove('invalid'); });
       $('wtypeBox').classList.remove('invalid');
 
       var f = {
         district: $('district').value,
-        sector: $('sector').value.trim(),
-        cell: $('cell').value.trim(),
-        village: $('village').value.trim(),
+        sector: val('sector'),
+        cell: val('cell'),
+        village: val('village'),
         collector: $('collector').value.trim(),
         workplaceType: wtype(),
         workplaceName: $('wname').value.trim(),
@@ -170,9 +259,12 @@
       }
 
       if (!f.district) return fail('district', 'Hitamo akarere.');
-      if (!f.sector) return fail('sector', 'Andika umurenge.');
-      if (!f.cell) return fail('cell', 'Andika akagari.');
-      if (!f.village) return fail('village', 'Andika umudugudu.');
+      if (!f.sector) return fail(($('sector').style.display === 'none' || $('sector').value === OTHER)
+        ? 'sectorOther' : 'sector', 'Hitamo cyangwa wandike umurenge.');
+      if (!f.cell) return fail(($('cell').style.display === 'none' || $('cell').value === OTHER)
+        ? 'cellOther' : 'cell', 'Hitamo cyangwa wandike akagari.');
+      if (!f.village) return fail(($('village').style.display === 'none' || $('village').value === OTHER)
+        ? 'villageOther' : 'village', 'Hitamo cyangwa wandike umudugudu.');
       if (!f.collector) return fail('collector', "Andika izina ry'umuntu uri gukusanya amakuru.");
       if (!f.workplaceType) return fail('wtypeBox', 'Hitamo niba ari koperative cyangwa umuhinzi ku giti cye.');
       if (!f.workplaceName) return fail('wname', f.workplaceType === 'Koperative'
