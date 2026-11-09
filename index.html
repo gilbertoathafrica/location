@@ -33,11 +33,28 @@
 </head>
 <body>
   <div id="formBox">
-  <h1>Gukusanya amakuru y'aho OSL Iri gukoreshwa</h1>
+  <h1>Dusangize aho uherereye</h1>
   <p class="sub">Uzuza iyi form iri hasi uhagaze hagati m'umurima(byibura muri metero 15 uvuye kumbibi z'umurima) nibagusaba gufungura location ukande kuri <b>Allow</b> (Emera). Tegereza kugeza ubutumwa bwo gushimira bugaragaye.</p>
+  <small class="req">* = ni ngombwa kuzuza</small>
 
-  <label for="site">Izina ry'ahantu *</label>
-  <input id="site" type="text" maxlength="100" placeholder="Urugero: Nyagatare, Karangazi">
+  <label for="district">Akarere *</label>
+  <select id="district">
+    <option value="">— Hitamo akarere —</option>
+      <optgroup label="Umujyi wa Kigali"><option>Gasabo</option><option>Kicukiro</option><option>Nyarugenge</option></optgroup>
+      <optgroup label="Amajyaruguru"><option>Burera</option><option>Gakenke</option><option>Gicumbi</option><option>Musanze</option><option>Rulindo</option></optgroup>
+      <optgroup label="Amajyepfo"><option>Gisagara</option><option>Huye</option><option>Kamonyi</option><option>Muhanga</option><option>Nyamagabe</option><option>Nyanza</option><option>Nyaruguru</option><option>Ruhango</option></optgroup>
+      <optgroup label="Iburasirazuba"><option>Bugesera</option><option>Gatsibo</option><option>Kayonza</option><option>Kirehe</option><option>Ngoma</option><option>Nyagatare</option><option>Rwamagana</option></optgroup>
+      <optgroup label="Iburengerazuba"><option>Karongi</option><option>Ngororero</option><option>Nyabihu</option><option>Nyamasheke</option><option>Rubavu</option><option>Rusizi</option><option>Rutsiro</option></optgroup>
+  </select>
+
+  <label for="sector">Umurenge *</label>
+  <input id="sector" type="text" maxlength="100" placeholder="Urugero: Karangazi">
+
+  <label for="cell">Akagari *</label>
+  <input id="cell" type="text" maxlength="100">
+
+  <label for="village">Umudugudu *</label>
+  <input id="village" type="text" maxlength="100">
 
   <label for="collector">Izina ry'umuntu uri gukusanya amakuru *</label>
   <input id="collector" type="text" maxlength="100">
@@ -92,17 +109,22 @@
   </div>
 
   <script>
-  
+    // PASTE YOUR APPS SCRIPT /exec URL BETWEEN THE QUOTES:
     var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwnqLlfCl7eH4vNkmCUkjhQKx9bvxV7Hmtu0HB_msclgL1WvmJD8fnYAgCnEsGALCD3/exec';
 
     var TARGET_ACCURACY = 15;   // metres: stop as soon as a reading is this good
     var MAX_WAIT_MS = 60000;    // otherwise keep the best reading for up to 60 s
 
-    // If the link has ?site=..., pre-fill the site box (people can still edit it).
-    var urlSite = new URLSearchParams(window.location.search).get('site') || '';
-    document.getElementById('site').value = urlSite.replace(/_/g, ' ');
-
     function $(id) { return document.getElementById(id); }
+
+    // Optional: a link ending in ?district=Nyagatare pre-selects the district.
+    var urlDistrict = new URLSearchParams(window.location.search).get('district') || '';
+    if (urlDistrict) {
+      var want = urlDistrict.trim().toLowerCase();
+      Array.prototype.forEach.call($('district').options, function (o) {
+        if (o.value.toLowerCase() === want) $('district').value = o.value;
+      });
+    }
 
     function show(msg, cls) {
       var s = $('status');
@@ -121,12 +143,16 @@
       $('wtypeBox').classList.remove('invalid');
     }
 
+    // Returns the form values, or null (with the first problem highlighted) if something is missing.
     function readForm() {
-      ['site', 'collector', 'wname', 'area', 'crop'].forEach(function (id) { $(id).classList.remove('invalid'); });
+      ['district', 'sector', 'cell', 'village', 'collector', 'wname', 'area', 'crop'].forEach(function (id) { $(id).classList.remove('invalid'); });
       $('wtypeBox').classList.remove('invalid');
 
       var f = {
-        site: $('site').value.trim(),
+        district: $('district').value,
+        sector: $('sector').value.trim(),
+        cell: $('cell').value.trim(),
+        village: $('village').value.trim(),
         collector: $('collector').value.trim(),
         workplaceType: wtype(),
         workplaceName: $('wname').value.trim(),
@@ -144,7 +170,10 @@
         return null;
       }
 
-      if (!f.site) return fail('site', "Andika izina ry'ahantu.");
+      if (!f.district) return fail('district', 'Hitamo akarere.');
+      if (!f.sector) return fail('sector', 'Andika umurenge.');
+      if (!f.cell) return fail('cell', 'Andika akagari.');
+      if (!f.village) return fail('village', 'Andika umudugudu.');
       if (!f.collector) return fail('collector', "Andika izina ry'umuntu uri gukusanya amakuru.");
       if (!f.workplaceType) return fail('wtypeBox', 'Hitamo niba ari koperative cyangwa umuhinzi ku giti cye.');
       if (!f.workplaceName) return fail('wname', f.workplaceType === 'Koperative'
@@ -191,7 +220,7 @@
              ' (amasegonda ' + secs + '). Tegereza.', 'info');
         if (best.coords.accuracy <= TARGET_ACCURACY) finish();
       }, function (err) {
-        if (err.code === 1) {           
+        if (err.code === 1) {             // permission denied: stop immediately
           done = true;
           navigator.geolocation.clearWatch(watchId);
           clearTimeout(timer);
@@ -210,7 +239,10 @@
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
         accuracy: pos.coords.accuracy,
-        site: form.site,
+        district: form.district,
+        sector: form.sector,
+        cell: form.cell,
+        village: form.village,
         name: form.collector,
         workplaceType: form.workplaceType,
         workplaceName: form.workplaceName,
