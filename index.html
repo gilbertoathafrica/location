@@ -9,7 +9,7 @@
     h1 { font-size: 22px; margin-bottom: 4px; }
     p.sub { color: #555; margin-top: 0; }
     label { display: block; margin: 14px 0 4px; font-weight: bold; font-size: 14px; }
-    input[type=text], input[type=number], select, textarea { width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px; border: 1px solid #bbb; border-radius: 6px; font-family: inherit; background: #fff; }
+    input[type=text], input[type=number], input[type=date], select, textarea { width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px; border: 1px solid #bbb; border-radius: 6px; font-family: inherit; background: #fff; }
     .choices { display: flex; gap: 8px; }
     .choices label { flex: 1; margin: 0; font-weight: normal; border: 1px solid #bbb; border-radius: 6px; padding: 10px; display: flex; align-items: center; gap: 6px; font-size: 15px; }
     .row { display: flex; gap: 8px; }
@@ -63,6 +63,16 @@
   <label for="collector">Izina ry'umuntu uri gukusanya amakuru *</label>
   <input id="collector" type="text" maxlength="100">
 
+  <label for="forWho">Uri gukusanyiriza amakuru nde? *</label>
+  <select id="forWho" onchange="onForWho()">
+    <option value="">— Hitamo —</option>
+    <option value="YEAN">YEAN</option>
+    <option value="SNV">SNV</option>
+    <option value="Umuhinzi ku giti cye">Umuhinzi ku giti cye</option>
+    <option value="__other">Ikindi (andika)</option>
+  </select>
+  <input id="forWhoOther" class="other" type="text" maxlength="100" placeholder="Andika izina ry'ikigo cyangwa umuntu">
+
   <label>Aho akorera cyangwa aho yakoreye *</label>
   <div class="choices" id="wtypeBox">
     <label><input type="radio" name="wtype" value="Koperative" onchange="updateWorkplace()"> Koperative</label>
@@ -96,6 +106,9 @@
     <option value="Icyayi">
     <option value="Ikawa">
   </datalist>
+
+  <label for="firstDate">Itariki OSL yakoreshejweho bwa mbere kuri uyu murima *</label>
+  <input id="firstDate" type="date">
 
   <label for="note">Ibindi bisobanuro by'inyongera</label>
   <textarea id="note" rows="2" maxlength="200"></textarea>
@@ -218,6 +231,25 @@
       s.className = cls; s.style.display = 'block'; s.textContent = msg;
     }
 
+    // "Who are you collecting for?" — a list, plus a box when "Ikindi" is chosen.
+    function onForWho() {
+      var other = $('forWhoOther');
+      $('forWho').classList.remove('invalid'); other.classList.remove('invalid');
+      if ($('forWho').value === OTHER) { other.style.display = 'block'; other.focus(); }
+      else { other.style.display = 'none'; other.value = ''; }
+    }
+    function forWho() {
+      var v = $('forWho').value;
+      return v === OTHER ? $('forWhoOther').value.trim() : v;
+    }
+
+    // Date field: no future dates. Uses the phone's local date.
+    function todayISO() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    $('firstDate').max = todayISO();
+
     function wtype() {
       var r = document.querySelector('input[name=wtype]:checked');
       return r ? r.value : '';
@@ -233,7 +265,7 @@
     // Returns the form values, or null (with the first problem highlighted) if something is missing.
     function readForm() {
       ['district', 'sector', 'cell', 'village', 'sectorOther', 'cellOther', 'villageOther',
-       'collector', 'wname', 'area', 'crop'].forEach(function (id) { $(id).classList.remove('invalid'); });
+       'collector', 'forWho', 'forWhoOther', 'wname', 'area', 'crop', 'firstDate'].forEach(function (id) { $(id).classList.remove('invalid'); });
       $('wtypeBox').classList.remove('invalid');
 
       var f = {
@@ -242,11 +274,13 @@
         cell: val('cell'),
         village: val('village'),
         collector: $('collector').value.trim(),
+        collectedFor: forWho(),
         workplaceType: wtype(),
         workplaceName: $('wname').value.trim(),
         area: $('area').value.trim(),
         unit: $('unit').value,
         crop: $('crop').value.trim(),
+        firstDate: $('firstDate').value,
         note: $('note').value.trim()
       };
 
@@ -266,12 +300,16 @@
       if (!f.village) return fail(($('village').style.display === 'none' || $('village').value === OTHER)
         ? 'villageOther' : 'village', 'Hitamo cyangwa wandike umudugudu.');
       if (!f.collector) return fail('collector', "Andika izina ry'umuntu uri gukusanya amakuru.");
+      if (!f.collectedFor) return fail($('forWho').value === OTHER ? 'forWhoOther' : 'forWho',
+        'Hitamo uwo uri gukusanyiriza amakuru.');
       if (!f.workplaceType) return fail('wtypeBox', 'Hitamo niba ari koperative cyangwa umuhinzi ku giti cye.');
       if (!f.workplaceName) return fail('wname', f.workplaceType === 'Koperative'
         ? 'Andika izina rya koperative.' : "Andika izina ry'umuhinzi.");
       var a = Number(f.area);
       if (!f.area || !isFinite(a) || a <= 0) return fail('area', 'Andika ubuso nyabwo (umubare uruta zeru).');
       if (!f.crop) return fail('crop', 'Andika igihingwa cyakoreshejweho OSL.');
+      if (!f.firstDate) return fail('firstDate', 'Hitamo itariki OSL yakoreshejweho bwa mbere.');
+      if (f.firstDate > todayISO()) return fail('firstDate', 'Itariki ntishobora kuba iri imbere y\'uyu munsi.');
       return f;
     }
 
@@ -335,11 +373,13 @@
         cell: form.cell,
         village: form.village,
         name: form.collector,
+        collectedFor: form.collectedFor,
         workplaceType: form.workplaceType,
         workplaceName: form.workplaceName,
         area: form.area,
         unit: form.unit,
         crop: form.crop,
+        firstDate: form.firstDate,
         note: form.note
       };
       show('Birimo kubikwa…', 'info');
