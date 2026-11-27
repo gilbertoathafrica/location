@@ -132,16 +132,14 @@
   </div>
 
   <script>
-    // PASTE YOUR APPS SCRIPT /exec URL BETWEEN THE QUOTES:
+
     var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwnqLlfCl7eH4vNkmCUkjhQKx9bvxV7Hmtu0HB_msclgL1WvmJD8fnYAgCnEsGALCD3/exec';
 
-    var TARGET_ACCURACY = 15;   // metres: stop as soon as a reading is this good
-    var MAX_WAIT_MS = 60000;    // otherwise keep the best reading for up to 60 s
+    var TARGET_ACCURACY = 15;  
+    var MAX_WAIT_MS = 60000; 
 
     function $(id) { return document.getElementById(id); }
 
-    // ----- Linked location lists: District -> Sector -> Cell -> Village -----
-    // locations.json sits next to this page: { district: { sector: { cell: [villages] } } }
     var LOC = null;
     var OTHER = '__other';
     var LEVELS = ['sector', 'cell', 'village'];
@@ -154,17 +152,13 @@
     fetch('locations.json')
       .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
       .then(function (data) { LOC = data; onDistrict(); })
-      .catch(function () { LOC = null; onDistrict(); });   // no list: people type names instead
-
-    // Value of a level: the chosen name, or what was typed if "not on the list".
+      .catch(function () { LOC = null; onDistrict(); }); 
     function val(level) {
       if (level === 'district') return $('district').value;
       var sel = $(level), other = $(level + 'Other');
       return (sel.style.display === 'none' || sel.value === OTHER) ? other.value.trim() : sel.value;
     }
 
-    // List of names available for a level, given the choices above it.
-    // Returns null when there is no list (data missing, or a parent was typed in).
     function choices(level) {
       if (!LOC) return null;
       var d = LOC[$('district').value];
@@ -182,7 +176,7 @@
       var list = choices(level);
       other.value = '';
       sel.classList.remove('invalid'); other.classList.remove('invalid');
-      if (list === null) {                    // free typing for this level
+      if (list === null) {             
         var parentKnown = level === 'sector' ? !!$('district').value : !!val(LEVELS[LEVELS.indexOf(level) - 1]);
         sel.style.display = 'none';
         other.style.display = 'block';
@@ -222,8 +216,7 @@
           $(LEVELS[i + 1] + 'Other').disabled = !$(level + 'Other').value.trim();
       });
     });
-
-    // Optional: a link ending in ?district=Nyagatare pre-selects the district.
+    
     var urlDistrict = new URLSearchParams(window.location.search).get('district') || '';
     if (urlDistrict) {
       var want = urlDistrict.trim().toLowerCase();
@@ -237,7 +230,7 @@
       s.className = cls; s.style.display = 'block'; s.textContent = msg;
     }
 
-    // "Who are you collecting for?" — a list, plus a box when "Ikindi" is chosen.
+    // Who are you collecting for? 
     function onForWho() {
       var other = $('forWhoOther');
       $('forWho').classList.remove('invalid'); other.classList.remove('invalid');
@@ -368,7 +361,7 @@
              ' (amasegonda ' + secs + '). Tegereza.', 'info');
         if (best.coords.accuracy <= TARGET_ACCURACY) finish();
       }, function (err) {
-        if (err.code === 1) {             // permission denied: stop immediately
+        if (err.code === 1) {         
           done = true;
           navigator.geolocation.clearWatch(watchId);
           clearTimeout(timer);
