@@ -99,17 +99,19 @@
   </div>
 
   <label for="crop">Igihingwa cyakoreshejweho OSL *</label>
-  <input id="crop" type="text" maxlength="100" list="crops" placeholder="Example: Maize">
-  <datalist id="crops">
-    <option value="Maize">
-    <option value="Beans">
-    <option value="Potato">
-    <option value="Rice">
-    <option value="Vegetables">
-    <option value="Banana">
-    <option value="Tea">
-    <option value="Coffee">
-  </datalist>
+  <select id="crop" onchange="onCrop()">
+    <option value="">— Hitamo —</option>
+    <option value="Maize">Maize</option>
+    <option value="Beans">Beans</option>
+    <option value="Potato">Potato</option>
+    <option value="Rice">Rice</option>
+    <option value="Vegetables">Vegetables</option>
+    <option value="Banana">Banana</option>
+    <option value="Tea">Tea</option>
+    <option value="Coffee">Coffee</option>
+    <option value="__other">Ikindi (andika)</option>
+  </select>
+  <input id="cropOther" class="other" type="text" maxlength="100" placeholder="Andika igihingwa">
 
   <label for="firstDate">Itariki OSL yakoreshejweho bwa mbere kuri uyu murima *</label>
   <input id="firstDate" type="date">
@@ -247,6 +249,18 @@
       return v === OTHER ? $('forWhoOther').value.trim() : v;
     }
 
+    // Crop dropdown: shows a text box when "Ikindi" is chosen.
+    function onCrop() {
+      var other = $('cropOther');
+      $('crop').classList.remove('invalid'); other.classList.remove('invalid');
+      if ($('crop').value === OTHER) { other.style.display = 'block'; other.focus(); }
+      else { other.style.display = 'none'; other.value = ''; }
+    }
+    function cropValue() {
+      var v = $('crop').value;
+      return v === OTHER ? $('cropOther').value.trim() : v;
+    }
+
     // Date field: no future dates. Uses the phone's local date.
     function todayISO() {
       var d = new Date();
@@ -269,7 +283,7 @@
     // Returns the form values, or null (with the first problem highlighted) if something is missing.
     function readForm() {
       ['district', 'sector', 'cell', 'village', 'sectorOther', 'cellOther', 'villageOther',
-       'collector', 'forWho', 'forWhoOther', 'wname', 'area', 'crop', 'firstDate'].forEach(function (id) { $(id).classList.remove('invalid'); });
+       'collector', 'forWho', 'forWhoOther', 'wname', 'area', 'crop', 'cropOther', 'firstDate'].forEach(function (id) { $(id).classList.remove('invalid'); });
       $('wtypeBox').classList.remove('invalid');
 
       var f = {
@@ -283,7 +297,7 @@
         workplaceName: $('wname').value.trim(),
         area: $('area').value.trim(),
         unit: $('unit').value,
-        crop: $('crop').value.trim(),
+        crop: cropValue(),
         firstDate: $('firstDate').value,
         note: $('note').value.trim()
       };
@@ -311,7 +325,8 @@
         ? 'Andika izina rya koperative.' : "Andika izina ry'umuhinzi.");
       var a = Number(f.area);
       if (!f.area || !isFinite(a) || a <= 0) return fail('area', 'Andika ubuso nyabwo (umubare uruta zeru).');
-      if (!f.crop) return fail('crop', 'Andika igihingwa cyakoreshejweho OSL.');
+      if (!f.crop) return fail($('crop').value === OTHER ? 'cropOther' : 'crop',
+        'Hitamo cyangwa wandike igihingwa cyakoreshejweho OSL.');
       if (!f.firstDate) return fail('firstDate', 'Hitamo itariki OSL yakoreshejweho bwa mbere.');
       if (f.firstDate > todayISO()) return fail('firstDate', 'Itariki ntishobora kuba iri imbere y\'uyu munsi.');
       return f;
